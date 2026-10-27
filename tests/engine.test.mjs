@@ -1,0 +1,17 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {solveCircuit} from '../js/engine.js';
+const b={id:1,type:'battery',value:9},s={id:2,type:'switch',closed:true},r={id:3,type:'resistor',value:330},l={id:4,type:'led',color:'red'};
+const w=(a,i,b,j)=>({a:{id:a,index:i},b:{id:b,index:j}});
+const standard=[w(1,0,2,0),w(2,1,3,0),w(3,1,4,0),w(4,1,1,1)];
+test('9V, 330Ω LED red: 21.21mA',()=>{const x=solveCircuit([b,s,r,l],standard);assert.ok(Math.abs(x.current-21.212121)<.001);assert.ok(x.valid)});
+test('arbitrary series order',()=>{const wiring=[w(1,0,4,0),w(4,1,3,0),w(3,1,2,0),w(2,1,1,1)];assert.ok(solveCircuit([b,s,r,l],wiring).valid)});
+test('two series resistors calculate correctly',()=>{const r2={id:5,type:'resistor',value:670};const wiring=[w(1,0,2,0),w(2,1,3,0),w(3,1,5,0),w(5,1,4,0),w(4,1,1,1)];const x=solveCircuit([b,s,r,r2,l],wiring);assert.ok(Math.abs(x.current-7)<.001);assert.ok(Math.abs(x.componentVoltages[5]-4.69)<.001)});
+test('open switch gives zero',()=>assert.equal(solveCircuit([b,{...s,closed:false},r,l],standard).current,0));
+test('broken wire gives zero',()=>assert.equal(solveCircuit([b,s,r,l],standard.slice(1)).current,0));
+test('reverse LED gives zero',()=>assert.equal(solveCircuit([b,s,r,l],[w(1,0,2,0),w(2,1,3,0),w(3,1,4,1),w(4,0,1,1)]).current,0));
+test('direct battery short detected',()=>assert.equal(solveCircuit([b,s,r,l],[w(1,0,1,1)]).short,true));
+test('branch rejected rather than fabricated current',()=>{const x=solveCircuit([b,s,r,l],[...standard,w(1,0,3,0)]);assert.equal(x.valid,false)});
+test('resistor bypass rejected',()=>{const x=solveCircuit([b,s,r,l],[...standard,w(3,0,3,1)]);assert.equal(x.valid,false)});
+test('sim stopped gives zero',()=>assert.equal(solveCircuit([b,s,r,l],standard,false).current,0));
+test('second LED in series',()=>{const l2={id:6,type:'led',color:'green'};const wires=[w(1,0,2,0),w(2,1,3,0),w(3,1,4,0),w(4,1,6,0),w(6,1,1,1)];const x=solveCircuit([b,s,r,l,l2],wires);assert.ok(x.valid);assert.ok(Math.abs(x.current-(9-4.2)/330*1000)<.001)});
